@@ -3,15 +3,17 @@ import matplotlib.pyplot as plt
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+import graphviz
 
-def entropy(y):
+
+def entropy(y): # Calculate the entropy of a label array
     p = np.mean(y)
     if p == 0 or p == 1:
         return 0
     return -p * np.log2(p) - (1 - p) * np.log2(1 - p)
 
 
-def split_dataset(X, y, feature_index, value, is_continuous):
+def split_dataset(X, y, feature_index, value, is_continuous): # Split the dataset based on a feature and its value
     if is_continuous[feature_index]:
         left_mask = X[:, feature_index] <= value
         right_mask = X[:, feature_index] > value
@@ -20,7 +22,7 @@ def split_dataset(X, y, feature_index, value, is_continuous):
         right_mask = X[:, feature_index] != value
     return X[left_mask], y[left_mask], X[right_mask], y[right_mask]
 
-def information_gain(X, y, feature_index, value, is_continuous):
+def information_gain(X, y, feature_index, value, is_continuous): # Calculate the information gain from splitting the dataset
     X_left, y_left, X_right, y_right = split_dataset(X, y, feature_index, value, is_continuous)
 
     if len(y_left) == 0 or len(y_right) == 0:
@@ -34,7 +36,7 @@ def information_gain(X, y, feature_index, value, is_continuous):
     H_after = weight_left * H_left + weight_right * H_right    
     return H_before - H_after
 
-def candidate_thresholds(values):
+def candidate_thresholds(values): 
     return [
         np.mean(values),
         np.median(values),
@@ -42,7 +44,7 @@ def candidate_thresholds(values):
         np.percentile(values, 75)
     ]
 
-def best_split(X, y, is_continuous):
+def best_split(X, y, is_continuous): # Find the best feature and value to split the dataset
     best_gain = 0
     best_feature = None
     best_value = None
@@ -51,12 +53,7 @@ def best_split(X, y, is_continuous):
         values = X[:, feature_index]
 
         if is_continuous[feature_index]:
-            thresholds = [
-                np.mean(values),
-                np.median(values),
-                np.percentile(values, 25),
-                np.percentile(values, 75)
-            ]
+            thresholds = candidate_thresholds(values)
         else:
             thresholds = np.unique(values)
         for val in thresholds:
@@ -67,13 +64,17 @@ def best_split(X, y, is_continuous):
                 best_value = val
     return best_feature, best_value, best_gain
 
-def is_pure(y):
+def is_pure(y): # Check if all labels in y are the same
+    if len(y) == 0:
+        return False
     return len(np.unique(y)) == 1
 
-def majority_class(y):
+def majority_class(y): # Return the majority class label
+    if len(y) == 0:
+        return None
     return np.bincount(y).argmax()
 
-def build_tree(X, y, is_continuous, depth=0, max_depth=None):
+def build_tree(X, y, is_continuous, depth=0, max_depth=None): # Build the decision tree recursively
     if is_pure(y) or (max_depth is not None and depth >= max_depth):
         return majority_class(y)
     feature_index, value, gain = best_split(X, y, is_continuous)
@@ -94,7 +95,7 @@ def build_tree(X, y, is_continuous, depth=0, max_depth=None):
         'right': right_subtree
     }
 
-def predict_sample(tree, sample):
+def predict_sample(tree, sample): # Predict the class label for a single sample using the decision tree
     if not isinstance(tree, dict):
         return tree
 
@@ -113,13 +114,13 @@ def predict_sample(tree, sample):
         else:
             return predict_sample(tree['right'], sample)
 
-def predict(tree, X):
+def predict(tree, X): # Predict class labels for a set of samples using the decision tree
     return np.array([predict_sample(tree, sample) for sample in X])
 
-def accuracy(y_true, y_pred):
+def accuracy(y_true, y_pred):# Calculate the accuracy of predictions
     return np.mean(y_true == y_pred)
 
-
+## Visualization Functions
 def compute_tree_width(tree):
     """Compute total number of leaf nodes (tree width)."""
     if not isinstance(tree, dict):
@@ -182,21 +183,25 @@ def _plot_tree_recursive(ax, tree, feature_names, X, y, x, y_pos, total_width, d
 
 
 def main():
+    # Load and prepare data
     data = load_breast_cancer()
     X = data.data
     y = data.target
 
     is_continuous = [np.issubdtype(X[:, i].dtype, np.number) for i in range(X.shape[1])]
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
+    
+    # Train decision tree
     tree = build_tree(X_train, y_train, is_continuous, max_depth=3)  # try smaller depth for easier viewing
-
+    # Predict and evaluate
     y_pred_train = predict(tree, X_train)
     y_pred_test = predict(tree, X_test)
 
+    # Calculate accuracy
+    print("Training and Test Accuracy:")
     print(f"Train Accuracy: {accuracy(y_train, y_pred_train):.2f}")
     print(f"Test Accuracy: {accuracy(y_test, y_pred_test):.2f}")
-
+    # Print decision tree structure
     print("\nDecision Tree Structure:\n")
     plot_decision_tree(tree, data.feature_names, X_train, y_train)
 
